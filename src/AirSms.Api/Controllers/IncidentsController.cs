@@ -12,24 +12,12 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         CreateIncidentRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var incident = await incidentService.CreateAsync(request, cancellationToken);
+        var incident = await incidentService.CreateAsync(request, cancellationToken);
 
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = incident.Id },
-                incident);
-        }
-        catch (ArgumentException exception)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid incident",
-                Detail = exception.Message
-            });
-        }
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = incident.Id },
+            incident);
     }
 
     [HttpGet("{id:guid}")]
@@ -46,5 +34,54 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         CancellationToken cancellationToken)
     {
         return Ok(incidentService.List(cancellationToken));
+    }
+
+    [HttpPost("{id:guid}/assign")]
+    public async Task<ActionResult<IncidentResponse>> Assign(
+        Guid id,
+        AssignIncidentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var incident = await incidentService.AssignAsync(
+            id,
+            request.AssignedToUserId,
+            cancellationToken);
+
+        return incident is null ? IncidentNotFound(id) : Ok(incident);
+    }
+
+    [HttpPost("{id:guid}/start")]
+    public async Task<ActionResult<IncidentResponse>> Start(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var incident = await incidentService.StartAsync(id, cancellationToken);
+        return incident is null ? IncidentNotFound(id) : Ok(incident);
+    }
+
+    [HttpPost("{id:guid}/resolve")]
+    public async Task<ActionResult<IncidentResponse>> Resolve(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var incident = await incidentService.ResolveAsync(id, cancellationToken);
+        return incident is null ? IncidentNotFound(id) : Ok(incident);
+    }
+
+    [HttpPost("{id:guid}/close")]
+    public async Task<ActionResult<IncidentResponse>> Close(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var incident = await incidentService.CloseAsync(id, cancellationToken);
+        return incident is null ? IncidentNotFound(id) : Ok(incident);
+    }
+
+    private ObjectResult IncidentNotFound(Guid id)
+    {
+        return Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Incident not found",
+            detail: $"Incident '{id}' was not found.");
     }
 }

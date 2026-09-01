@@ -56,6 +56,91 @@ public class IncidentApplicationTests
         Assert.Equal(new[] { newer.Id, older.Id }, responses.Select(response => response.Id));
     }
 
+    [Fact]
+    public async Task AssignOpenIncidentPersistsAssigneeAndAssignedStatus()
+    {
+        var incident = CreateIncident();
+        var context = new FakeAirSmsDbContext(incident);
+        var assigneeId = Guid.NewGuid();
+
+        var response = await new IncidentService(context).AssignAsync(incident.Id, assigneeId);
+
+        Assert.NotNull(response);
+        Assert.Equal(IncidentStatus.Assigned, response.Status);
+        Assert.Equal(assigneeId, response.AssignedToUserId);
+        Assert.Equal(1, context.SaveChangesCalls);
+    }
+
+    [Fact]
+    public async Task StartAssignedIncidentChangesStatusToInProgress()
+    {
+        var incident = CreateIncident();
+        incident.AssignTo(Guid.NewGuid());
+
+        var response = await new IncidentService(new FakeAirSmsDbContext(incident))
+            .StartAsync(incident.Id);
+
+        Assert.NotNull(response);
+        Assert.Equal(IncidentStatus.InProgress, response.Status);
+    }
+
+    [Fact]
+    public async Task StartOpenIncidentThrowsInvalidOperation()
+    {
+        var incident = CreateIncident();
+        var service = new IncidentService(new FakeAirSmsDbContext(incident));
+
+        await Assert.ThrowsAsync<IncidentConflictException>(() => service.StartAsync(incident.Id));
+    }
+
+    [Fact]
+    public async Task ResolveInProgressIncidentSetsResolvedStatusAndTimestamp()
+    {
+        var incident = CreateIncident();
+        incident.AssignTo(Guid.NewGuid());
+        incident.StartProgress();
+
+        var response = await new IncidentService(new FakeAirSmsDbContext(incident))
+            .ResolveAsync(incident.Id);
+
+        Assert.NotNull(response);
+        Assert.Equal(IncidentStatus.Resolved, response.Status);
+        Assert.NotNull(response.ResolvedAt);
+    }
+
+    [Fact]
+    public async Task ResolveOpenIncidentThrowsInvalidOperation()
+    {
+        var incident = CreateIncident();
+        var service = new IncidentService(new FakeAirSmsDbContext(incident));
+
+        await Assert.ThrowsAsync<IncidentConflictException>(() => service.ResolveAsync(incident.Id));
+    }
+
+    [Fact]
+    public async Task CloseResolvedIncidentChangesStatusToClosed()
+    {
+        var incident = CreateIncident();
+        incident.AssignTo(Guid.NewGuid());
+        incident.StartProgress();
+        incident.Resolve();
+
+        var response = await new IncidentService(new FakeAirSmsDbContext(incident))
+            .CloseAsync(incident.Id);
+
+        Assert.NotNull(response);
+        Assert.Equal(IncidentStatus.Closed, response.Status);
+    }
+
+    [Fact]
+    public async Task CloseBeforeResolvedThrowsInvalidOperation()
+    {
+        var incident = CreateIncident();
+        var service = new IncidentService(new FakeAirSmsDbContext(incident));
+
+        await Assert.ThrowsAsync<IncidentConflictException>(() => service.CloseAsync(incident.Id));
+    }
+
     internal static CreateIncidentRequest CreateRequest(Guid? reporterId = null)
     {
         return new CreateIncidentRequest(
@@ -87,6 +172,14 @@ internal sealed class FakeAirSmsDbContext(params Incident[] incidents) : IAirSms
     public List<Incident> StoredIncidents { get; } = [.. incidents];
     public IQueryable<Incident> Incidents => StoredIncidents.AsQueryable();
     public int SaveChangesCalls { get; private set; }
+
+    public Task<Incident?> FindIncidentForUpdateAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(StoredIncidents.SingleOrDefault(incident => incident.Id == id));
+    }
 
     public void AddIncident(Incident incident)
     {

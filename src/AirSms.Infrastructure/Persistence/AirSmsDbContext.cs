@@ -12,6 +12,15 @@ public class AirSmsDbContext(DbContextOptions<AirSmsDbContext> options)
 
     IQueryable<Incident> IAirSmsDbContext.Incidents => Incidents.AsNoTracking();
 
+    public Task<Incident?> FindIncidentForUpdateAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return Incidents.SingleOrDefaultAsync(
+            incident => incident.Id == id,
+            cancellationToken);
+    }
+
     public void AddIncident(Incident incident)
     {
         Incidents.Add(incident);

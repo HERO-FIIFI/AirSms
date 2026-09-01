@@ -46,6 +46,63 @@ public sealed class IncidentService(IAirSmsDbContext dbContext)
             .ToList();
     }
 
+    public Task<IncidentResponse?> AssignAsync(
+        Guid id,
+        Guid assignedToUserId,
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateAsync(
+            id,
+            incident => incident.AssignTo(assignedToUserId),
+            cancellationToken);
+    }
+
+    public Task<IncidentResponse?> StartAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateAsync(id, incident => incident.StartProgress(), cancellationToken);
+    }
+
+    public Task<IncidentResponse?> ResolveAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateAsync(id, incident => incident.Resolve(), cancellationToken);
+    }
+
+    public Task<IncidentResponse?> CloseAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateAsync(id, incident => incident.Close(), cancellationToken);
+    }
+
+    private async Task<IncidentResponse?> UpdateAsync(
+        Guid id,
+        Action<Incident> update,
+        CancellationToken cancellationToken)
+    {
+        var incident = await dbContext.FindIncidentForUpdateAsync(id, cancellationToken);
+        if (incident is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            update(incident);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new IncidentConflictException(exception.Message, exception);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return ToResponse(incident);
+    }
+
     private static IncidentResponse ToResponse(Incident incident)
     {
         return new IncidentResponse(
