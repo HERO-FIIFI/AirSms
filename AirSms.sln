@@ -3,6 +3,20 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{14BA69F9-41AF-4C7F-A201-408381DDC840}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirSms.Api", "src\AirSms.Api\AirSms.Api.csproj", "{14E98661-3BD7-4108-9522-0DE997316C41}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirSms.Application", "src\AirSms.Application\AirSms.Application.csproj", "{A7F7A5AF-79FE-459C-9B04-819693284C30}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirSms.Domain", "src\AirSms.Domain\AirSms.Domain.csproj", "{63B00C73-4777-4584-AFDA-F9A104049353}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirSms.Infrastructure", "src\AirSms.Infrastructure\AirSms.Infrastructure.csproj", "{E7763F75-E1FD-4571-A206-BBF2DED3F884}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2095F8BC-F0F7-40B1-A23A-D8425EC525BF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirSms.Tests", "tests\AirSms.Tests\AirSms.Tests.csproj", "{F0D5203C-33B9-406D-B232-E1FE5CCDAEBA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -10,5 +24,34 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{14E98661-3BD7-4108-9522-0DE997316C41}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14E98661-3BD7-4108-9522-0DE997316C41}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14E98661-3BD7-4108-9522-0DE997316C41}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14E98661-3BD7-4108-9522-0DE997316C41}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7F7A5AF-79FE-459C-9B04-819693284C30}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7F7A5AF-79FE-459C-9B04-819693284C30}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7F7A5AF-79FE-459C-9B04-819693284C30}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7F7A5AF-79FE-459C-9B04-819693284C30}.Release|Any CPU.Build.0 = Release|Any CPU
+		{63B00C73-4777-4584-AFDA-F9A104049353}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{63B00C73-4777-4584-AFDA-F9A104049353}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{63B00C73-4777-4584-AFDA-F9A104049353}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{63B00C73-4777-4584-AFDA-F9A104049353}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E7763F75-E1FD-4571-A206-BBF2DED3F884}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7763F75-E1FD-4571-A206-BBF2DED3F884}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7763F75-E1FD-4571-A206-BBF2DED3F884}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7763F75-E1FD-4571-A206-BBF2DED3F884}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F0D5203C-33B9-406D-B232-E1FE5CCDAEBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F0D5203C-33B9-406D-B232-E1FE5CCDAEBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F0D5203C-33B9-406D-B232-E1FE5CCDAEBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F0D5203C-33B9-406D-B232-E1FE5CCDAEBA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{14E98661-3BD7-4108-9522-0DE997316C41} = {14BA69F9-41AF-4C7F-A201-408381DDC840}
+		{A7F7A5AF-79FE-459C-9B04-819693284C30} = {14BA69F9-41AF-4C7F-A201-408381DDC840}
+		{63B00C73-4777-4584-AFDA-F9A104049353} = {14BA69F9-41AF-4C7F-A201-408381DDC840}
+		{E7763F75-E1FD-4571-A206-BBF2DED3F884} = {14BA69F9-41AF-4C7F-A201-408381DDC840}
+		{F0D5203C-33B9-406D-B232-E1FE5CCDAEBA} = {2095F8BC-F0F7-40B1-A23A-D8425EC525BF}
 	EndGlobalSection
 EndGlobal
