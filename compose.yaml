@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: airsms-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: airsms
+      POSTGRES_USER: airsms
+      POSTGRES_PASSWORD: airsms_dev_password
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - airsms-postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airsms -d airsms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  airsms-postgres-data:

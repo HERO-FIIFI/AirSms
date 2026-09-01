@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\AirSms.Api\AirSms.Api.csproj" />
     <ProjectReference Include="..\..\src\AirSms.Application\AirSms.Application.csproj" />
     <ProjectReference Include="..\..\src\AirSms.Domain\AirSms.Domain.csproj" />
   </ItemGroup>

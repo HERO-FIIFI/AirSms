@@ -1,3 +1,4 @@
+using AirSms.Application.Common.Interfaces;
 using AirSms.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -17,6 +18,8 @@ public static class DependencyInjection
 
         services.AddDbContext<AirSmsDbContext>(options =>
             options.UseNpgsql(connectionString));
+        services.AddScoped<IAirSmsDbContext>(provider =>
+            provider.GetRequiredService<AirSmsDbContext>());
 
         return services;
     }
