@@ -1,0 +1,56 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "AirSms.Infrastructure/1.0.0": {
+        "dependencies": {
+          "AirSms.Application": "1.0.0",
+          "AirSms.Domain": "1.0.0"
+        },
+        "runtime": {
+          "AirSms.Infrastructure.dll": {}
+        }
+      },
+      "AirSms.Application/1.0.0": {
+        "dependencies": {
+          "AirSms.Domain": "1.0.0"
+        },
+        "runtime": {
+          "AirSms.Application.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "AirSms.Domain/1.0.0": {
+        "runtime": {
+          "AirSms.Domain.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "AirSms.Infrastructure/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AirSms.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AirSms.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
