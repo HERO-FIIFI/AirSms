@@ -5,6 +5,12 @@ namespace AirSms.Domain.Entities;
 
 public class Incident : BaseEntity
 {
+    private Incident()
+    {
+        Title = null!;
+        Description = null!;
+    }
+
     public Incident(
         string title,
         string description,
