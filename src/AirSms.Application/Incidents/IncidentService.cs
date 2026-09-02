@@ -7,6 +7,7 @@ public sealed class IncidentService(IAirSmsDbContext dbContext)
 {
     public async Task<IncidentResponse> CreateAsync(
         CreateIncidentRequest request,
+        Guid reportedByUserId,
         CancellationToken cancellationToken = default)
     {
         var incident = new Incident(
@@ -14,7 +15,7 @@ public sealed class IncidentService(IAirSmsDbContext dbContext)
             request.Description,
             request.Category,
             request.Severity,
-            request.ReportedByUserId,
+            reportedByUserId,
             request.FlightNumber,
             request.AircraftRegistration);
 
@@ -35,12 +36,48 @@ public sealed class IncidentService(IAirSmsDbContext dbContext)
     }
 
     public IReadOnlyList<IncidentResponse> List(
+        ListIncidentsRequest? request = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        return dbContext.Incidents
+        request ??= new ListIncidentsRequest();
+        if (request.Page < 1)
+        {
+            throw new ArgumentException("Page must be greater than zero.", nameof(request));
+        }
+
+        if (request.PageSize is < 1 or > 100)
+        {
+            throw new ArgumentException("PageSize must be between 1 and 100.", nameof(request));
+        }
+
+        var incidents = dbContext.Incidents;
+
+        if (request.Status is not null)
+        {
+            incidents = incidents.Where(incident => incident.Status == request.Status);
+        }
+
+        if (request.Severity is not null)
+        {
+            incidents = incidents.Where(incident => incident.Severity == request.Severity);
+        }
+
+        if (request.Category is not null)
+        {
+            incidents = incidents.Where(incident => incident.Category == request.Category);
+        }
+
+        if (request.AssignedToUserId is not null)
+        {
+            incidents = incidents.Where(incident => incident.AssignedToUserId == request.AssignedToUserId);
+        }
+
+        return incidents
             .OrderByDescending(incident => incident.ReportedAt)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
             .AsEnumerable()
             .Select(ToResponse)
             .ToList();

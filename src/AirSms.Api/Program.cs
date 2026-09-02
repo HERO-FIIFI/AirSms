@@ -1,11 +1,15 @@
 using System.Text.Json.Serialization;
+using AirSms.Api.Authentication;
 using AirSms.Api.ErrorHandling;
+using AirSms.Application.Authentication;
 using AirSms.Application.Incidents;
 using AirSms.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAirSmsAuthentication(builder.Configuration);
+builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IncidentService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -30,6 +34,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

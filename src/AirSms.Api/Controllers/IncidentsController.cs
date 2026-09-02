@@ -1,9 +1,13 @@
+using System.Security.Claims;
+using AirSms.Api.Authentication;
 using AirSms.Application.Incidents;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AirSms.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = AuthorizationPolicies.IncidentAccess)]
 [Route("api/incidents")]
 public sealed class IncidentsController(IncidentService incidentService) : ControllerBase
 {
@@ -12,7 +16,11 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         CreateIncidentRequest request,
         CancellationToken cancellationToken)
     {
-        var incident = await incidentService.CreateAsync(request, cancellationToken);
+        var reporterId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var incident = await incidentService.CreateAsync(
+            request,
+            reporterId,
+            cancellationToken);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -31,12 +39,14 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
 
     [HttpGet]
     public ActionResult<IReadOnlyList<IncidentResponse>> List(
+        [FromQuery] ListIncidentsRequest request,
         CancellationToken cancellationToken)
     {
-        return Ok(incidentService.List(cancellationToken));
+        return Ok(incidentService.List(request, cancellationToken));
     }
 
     [HttpPost("{id:guid}/assign")]
+    [Authorize(Policy = AuthorizationPolicies.IncidentWorkflow)]
     public async Task<ActionResult<IncidentResponse>> Assign(
         Guid id,
         AssignIncidentRequest request,
@@ -51,6 +61,7 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
     }
 
     [HttpPost("{id:guid}/start")]
+    [Authorize(Policy = AuthorizationPolicies.IncidentWorkflow)]
     public async Task<ActionResult<IncidentResponse>> Start(
         Guid id,
         CancellationToken cancellationToken)
@@ -60,6 +71,7 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
     }
 
     [HttpPost("{id:guid}/resolve")]
+    [Authorize(Policy = AuthorizationPolicies.IncidentWorkflow)]
     public async Task<ActionResult<IncidentResponse>> Resolve(
         Guid id,
         CancellationToken cancellationToken)
@@ -69,6 +81,7 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
     }
 
     [HttpPost("{id:guid}/close")]
+    [Authorize(Policy = AuthorizationPolicies.IncidentWorkflow)]
     public async Task<ActionResult<IncidentResponse>> Close(
         Guid id,
         CancellationToken cancellationToken)

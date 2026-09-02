@@ -8,5 +8,4 @@ public sealed record CreateIncidentRequest(
     IncidentCategory Category,
     IncidentSeverity Severity,
     string? FlightNumber,
-    string? AircraftRegistration,
-    Guid ReportedByUserId);
+    string? AircraftRegistration);

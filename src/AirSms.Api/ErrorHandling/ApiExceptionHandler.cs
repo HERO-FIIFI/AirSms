@@ -1,3 +1,4 @@
+using AirSms.Application.Authentication;
 using AirSms.Application.Incidents;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -22,6 +23,14 @@ public sealed class ApiExceptionHandler(
             IncidentConflictException => (
                 StatusCodes.Status409Conflict,
                 "Invalid incident transition",
+                exception.Message),
+            DuplicateEmailException => (
+                StatusCodes.Status409Conflict,
+                "Email already registered",
+                exception.Message),
+            AuthenticationFailedException => (
+                StatusCodes.Status401Unauthorized,
+                "Authentication failed",
                 exception.Message),
             _ => (
                 StatusCodes.Status500InternalServerError,

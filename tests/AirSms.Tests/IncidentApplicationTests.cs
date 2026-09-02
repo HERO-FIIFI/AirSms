@@ -14,7 +14,7 @@ public class IncidentApplicationTests
         var service = new IncidentService(context);
         var reporterId = Guid.NewGuid();
 
-        var response = await service.CreateAsync(CreateRequest(reporterId));
+        var response = await service.CreateAsync(CreateRequest(), reporterId);
 
         Assert.Single(context.StoredIncidents);
         Assert.Equal(context.StoredIncidents[0].Id, response.Id);
@@ -54,6 +54,45 @@ public class IncidentApplicationTests
         var responses = service.List();
 
         Assert.Equal(new[] { newer.Id, older.Id }, responses.Select(response => response.Id));
+    }
+
+    [Fact]
+    public void ListFiltersByStatus()
+    {
+        var open = CreateIncident();
+        var assigned = CreateIncident();
+        assigned.AssignTo(Guid.NewGuid());
+        var service = new IncidentService(new FakeAirSmsDbContext(open, assigned));
+
+        var responses = service.List(new ListIncidentsRequest { Status = IncidentStatus.Assigned });
+
+        var response = Assert.Single(responses);
+        Assert.Equal(assigned.Id, response.Id);
+    }
+
+    [Fact]
+    public void ListPaginatesAfterNewestOrder()
+    {
+        var oldest = CreateIncident();
+        Thread.Sleep(1);
+        var middle = CreateIncident();
+        Thread.Sleep(1);
+        var newest = CreateIncident();
+        var service = new IncidentService(new FakeAirSmsDbContext(oldest, middle, newest));
+
+        var responses = service.List(new ListIncidentsRequest { Page = 2, PageSize = 1 });
+
+        var response = Assert.Single(responses);
+        Assert.Equal(middle.Id, response.Id);
+    }
+
+    [Fact]
+    public void ListRejectsInvalidPageSize()
+    {
+        var service = new IncidentService(new FakeAirSmsDbContext());
+
+        Assert.Throws<ArgumentException>(() =>
+            service.List(new ListIncidentsRequest { PageSize = 101 }));
     }
 
     [Fact]
@@ -141,7 +180,7 @@ public class IncidentApplicationTests
         await Assert.ThrowsAsync<IncidentConflictException>(() => service.CloseAsync(incident.Id));
     }
 
-    internal static CreateIncidentRequest CreateRequest(Guid? reporterId = null)
+    internal static CreateIncidentRequest CreateRequest()
     {
         return new CreateIncidentRequest(
             "Hydraulic warning",
@@ -149,8 +188,7 @@ public class IncidentApplicationTests
             IncidentCategory.Technical,
             IncidentSeverity.High,
             "AS123",
-            "N123AS",
-            reporterId ?? Guid.NewGuid());
+            "N123AS");
     }
 
     private static Incident CreateIncident()
@@ -161,7 +199,7 @@ public class IncidentApplicationTests
             request.Description,
             request.Category,
             request.Severity,
-            request.ReportedByUserId,
+            Guid.NewGuid(),
             request.FlightNumber,
             request.AircraftRegistration);
     }
@@ -170,7 +208,9 @@ public class IncidentApplicationTests
 internal sealed class FakeAirSmsDbContext(params Incident[] incidents) : IAirSmsDbContext
 {
     public List<Incident> StoredIncidents { get; } = [.. incidents];
+    public List<User> StoredUsers { get; } = [];
     public IQueryable<Incident> Incidents => StoredIncidents.AsQueryable();
+    public IQueryable<User> Users => StoredUsers.AsQueryable();
     public int SaveChangesCalls { get; private set; }
 
     public Task<Incident?> FindIncidentForUpdateAsync(
@@ -184,6 +224,19 @@ internal sealed class FakeAirSmsDbContext(params Incident[] incidents) : IAirSms
     public void AddIncident(Incident incident)
     {
         StoredIncidents.Add(incident);
+    }
+
+    public Task<User?> FindUserByEmailAsync(
+        string normalizedEmail,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(StoredUsers.SingleOrDefault(user => user.Email == normalizedEmail));
+    }
+
+    public void AddUser(User user)
+    {
+        StoredUsers.Add(user);
     }
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
