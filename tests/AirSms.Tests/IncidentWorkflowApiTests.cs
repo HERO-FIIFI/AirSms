@@ -8,12 +8,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AirSms.Api.Authentication;
 using AirSms.Application.Common.Interfaces;
-using AirSms.Application.Incidents;
+using AirSms.Application.Incidents.Commands.AssignIncident;
+using AirSms.Application.Incidents.Common;
 using AirSms.Domain.Enums;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -156,6 +158,7 @@ internal sealed class AirSmsApiFactory(FakeAirSmsDbContext context)
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureServices(services =>
         {
+            services.RemoveAll<IHostedService>();
             services.RemoveAll<IAirSmsDbContext>();
             services.AddSingleton<IAirSmsDbContext>(context);
         });

@@ -1,8 +1,8 @@
 using AirSms.Domain.Enums;
 
-namespace AirSms.Application.Incidents;
+namespace AirSms.Application.Incidents.Queries.ListIncidents;
 
-public sealed class ListIncidentsRequest
+public sealed class ListIncidentsQuery
 {
     public IncidentStatus? Status { get; init; }
     public IncidentSeverity? Severity { get; init; }

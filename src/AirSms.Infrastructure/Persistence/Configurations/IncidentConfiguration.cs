@@ -11,6 +11,7 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
         builder.ToTable("incidents");
 
         builder.HasKey(incident => incident.Id);
+        builder.Ignore(incident => incident.DomainEvents);
 
         builder.Property(incident => incident.Title)
             .HasMaxLength(200)

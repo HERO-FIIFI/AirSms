@@ -24,7 +24,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\AirSms.Api\AirSms.Api.csproj" />
     <ProjectReference Include="..\..\src\AirSms.Application\AirSms.Application.csproj" />
+    <ProjectReference Include="..\..\src\AirSms.Contracts\AirSms.Contracts.csproj" />
     <ProjectReference Include="..\..\src\AirSms.Domain\AirSms.Domain.csproj" />
+    <ProjectReference Include="..\..\src\AirSms.Infrastructure\AirSms.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\AirSms.Notifications\AirSms.Notifications.csproj" />
   </ItemGroup>
 
 </Project>

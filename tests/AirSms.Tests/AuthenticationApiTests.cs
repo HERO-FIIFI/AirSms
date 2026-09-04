@@ -4,7 +4,8 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 using AirSms.Application.Authentication;
-using AirSms.Application.Incidents;
+using AirSms.Application.Incidents.Commands.AssignIncident;
+using AirSms.Application.Incidents.Common;
 using AirSms.Domain.Enums;
 
 namespace AirSms.Tests;

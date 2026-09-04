@@ -1,5 +1,6 @@
 using AirSms.Domain.Common;
 using AirSms.Domain.Enums;
+using AirSms.Domain.Events;
 
 namespace AirSms.Domain.Entities;
 
@@ -50,6 +51,7 @@ public class Incident : BaseEntity
         AircraftRegistration = aircraftRegistration?.Trim();
         ReportedByUserId = reportedByUserId;
         ReportedAt = CreatedAt;
+        AddDomainEvent(new IncidentCreatedDomainEvent(Id, ReportedByUserId));
     }
 
     public string Title { get; private set; }
@@ -64,7 +66,7 @@ public class Incident : BaseEntity
     public DateTime ReportedAt { get; private set; }
     public DateTime? ResolvedAt { get; private set; }
 
-    public void AssignTo(Guid userId)
+    public void AssignTo(Guid userId, Guid? actorUserId = null)
     {
         if (userId == Guid.Empty)
         {
@@ -74,9 +76,10 @@ public class Incident : BaseEntity
         AssignedToUserId = userId;
         Status = IncidentStatus.Assigned;
         MarkUpdated();
+        AddDomainEvent(new IncidentAssignedDomainEvent(Id, userId, actorUserId));
     }
 
-    public void StartProgress()
+    public void StartProgress(Guid? actorUserId = null)
     {
         if (Status != IncidentStatus.Assigned)
         {
@@ -85,9 +88,10 @@ public class Incident : BaseEntity
 
         Status = IncidentStatus.InProgress;
         MarkUpdated();
+        AddDomainEvent(new IncidentStartedDomainEvent(Id, actorUserId));
     }
 
-    public void Resolve()
+    public void Resolve(Guid? actorUserId = null)
     {
         if (Status != IncidentStatus.InProgress)
         {
@@ -97,9 +101,10 @@ public class Incident : BaseEntity
         Status = IncidentStatus.Resolved;
         ResolvedAt = DateTime.UtcNow;
         MarkUpdated();
+        AddDomainEvent(new IncidentResolvedDomainEvent(Id, ResolvedAt.Value, actorUserId));
     }
 
-    public void Close()
+    public void Close(Guid? actorUserId = null)
     {
         if (Status != IncidentStatus.Resolved)
         {
@@ -108,5 +113,6 @@ public class Incident : BaseEntity
 
         Status = IncidentStatus.Closed;
         MarkUpdated();
+        AddDomainEvent(new IncidentClosedDomainEvent(Id, actorUserId));
     }
 }

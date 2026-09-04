@@ -1,6 +1,13 @@
 using System.Security.Claims;
 using AirSms.Api.Authentication;
-using AirSms.Application.Incidents;
+using AirSms.Application.Incidents.Commands.AssignIncident;
+using AirSms.Application.Incidents.Commands.CloseIncident;
+using AirSms.Application.Incidents.Commands.CreateIncident;
+using AirSms.Application.Incidents.Commands.ResolveIncident;
+using AirSms.Application.Incidents.Commands.StartIncident;
+using AirSms.Application.Incidents.Common;
+using AirSms.Application.Incidents.Queries.GetIncidentById;
+using AirSms.Application.Incidents.Queries.ListIncidents;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,18 +16,29 @@ namespace AirSms.Api.Controllers;
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.IncidentAccess)]
 [Route("api/incidents")]
-public sealed class IncidentsController(IncidentService incidentService) : ControllerBase
+public sealed class IncidentsController(
+    CreateIncidentCommandHandler createIncident,
+    GetIncidentByIdQueryHandler getIncidentById,
+    ListIncidentsQueryHandler listIncidents,
+    AssignIncidentCommandHandler assignIncident,
+    StartIncidentCommandHandler startIncident,
+    ResolveIncidentCommandHandler resolveIncident,
+    CloseIncidentCommandHandler closeIncident) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<IncidentResponse>> Create(
         CreateIncidentRequest request,
         CancellationToken cancellationToken)
     {
-        var reporterId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var incident = await incidentService.CreateAsync(
-            request,
-            reporterId,
-            cancellationToken);
+        var actorUserId = GetActorUserId();
+        var incident = await createIncident.Handle(new CreateIncidentCommand(
+            request.Title,
+            request.Description,
+            request.Category,
+            request.Severity,
+            actorUserId,
+            request.FlightNumber,
+            request.AircraftRegistration), cancellationToken);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -33,16 +51,16 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         Guid id,
         CancellationToken cancellationToken)
     {
-        var incident = incidentService.GetById(id, cancellationToken);
+        var incident = getIncidentById.Handle(new GetIncidentByIdQuery(id), cancellationToken);
         return incident is null ? NotFound() : Ok(incident);
     }
 
     [HttpGet]
     public ActionResult<IReadOnlyList<IncidentResponse>> List(
-        [FromQuery] ListIncidentsRequest request,
+        [FromQuery] ListIncidentsQuery request,
         CancellationToken cancellationToken)
     {
-        return Ok(incidentService.List(request, cancellationToken));
+        return Ok(listIncidents.Handle(request, cancellationToken));
     }
 
     [HttpPost("{id:guid}/assign")]
@@ -52,9 +70,8 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         AssignIncidentRequest request,
         CancellationToken cancellationToken)
     {
-        var incident = await incidentService.AssignAsync(
-            id,
-            request.AssignedToUserId,
+        var incident = await assignIncident.Handle(
+            new AssignIncidentCommand(id, request.AssignedToUserId, GetActorUserId()),
             cancellationToken);
 
         return incident is null ? IncidentNotFound(id) : Ok(incident);
@@ -66,7 +83,9 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         Guid id,
         CancellationToken cancellationToken)
     {
-        var incident = await incidentService.StartAsync(id, cancellationToken);
+        var incident = await startIncident.Handle(
+            new StartIncidentCommand(id, GetActorUserId()),
+            cancellationToken);
         return incident is null ? IncidentNotFound(id) : Ok(incident);
     }
 
@@ -76,7 +95,9 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         Guid id,
         CancellationToken cancellationToken)
     {
-        var incident = await incidentService.ResolveAsync(id, cancellationToken);
+        var incident = await resolveIncident.Handle(
+            new ResolveIncidentCommand(id, GetActorUserId()),
+            cancellationToken);
         return incident is null ? IncidentNotFound(id) : Ok(incident);
     }
 
@@ -86,8 +107,15 @@ public sealed class IncidentsController(IncidentService incidentService) : Contr
         Guid id,
         CancellationToken cancellationToken)
     {
-        var incident = await incidentService.CloseAsync(id, cancellationToken);
+        var incident = await closeIncident.Handle(
+            new CloseIncidentCommand(id, GetActorUserId()),
+            cancellationToken);
         return incident is null ? IncidentNotFound(id) : Ok(incident);
+    }
+
+    private Guid GetActorUserId()
+    {
+        return Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     }
 
     private ObjectResult IncidentNotFound(Guid id)

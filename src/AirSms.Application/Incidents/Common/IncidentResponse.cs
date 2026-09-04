@@ -1,6 +1,6 @@
 using AirSms.Domain.Enums;
 
-namespace AirSms.Application.Incidents;
+namespace AirSms.Application.Incidents.Common;
 
 public sealed record IncidentResponse(
     Guid Id,

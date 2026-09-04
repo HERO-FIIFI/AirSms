@@ -1,5 +1,13 @@
 using AirSms.Application.Common.Interfaces;
 using AirSms.Application.Incidents;
+using AirSms.Application.Incidents.Commands.AssignIncident;
+using AirSms.Application.Incidents.Commands.CloseIncident;
+using AirSms.Application.Incidents.Commands.CreateIncident;
+using AirSms.Application.Incidents.Commands.ResolveIncident;
+using AirSms.Application.Incidents.Commands.StartIncident;
+using AirSms.Application.Incidents.Common;
+using AirSms.Application.Incidents.Queries.GetIncidentById;
+using AirSms.Application.Incidents.Queries.ListIncidents;
 using AirSms.Domain.Entities;
 using AirSms.Domain.Enums;
 
@@ -11,10 +19,10 @@ public class IncidentApplicationTests
     public async Task CreatePersistsAndReturnsIncident()
     {
         var context = new FakeAirSmsDbContext();
-        var service = new IncidentService(context);
         var reporterId = Guid.NewGuid();
 
-        var response = await service.CreateAsync(CreateRequest(), reporterId);
+        var response = await new CreateIncidentCommandHandler(context)
+            .Handle(CreateCommand(reporterId));
 
         Assert.Single(context.StoredIncidents);
         Assert.Equal(context.StoredIncidents[0].Id, response.Id);
@@ -27,9 +35,9 @@ public class IncidentApplicationTests
     public void GetReturnsExistingIncident()
     {
         var incident = CreateIncident();
-        var service = new IncidentService(new FakeAirSmsDbContext(incident));
+        var handler = new GetIncidentByIdQueryHandler(new FakeAirSmsDbContext(incident));
 
-        var response = service.GetById(incident.Id);
+        var response = handler.Handle(new GetIncidentByIdQuery(incident.Id));
 
         Assert.NotNull(response);
         Assert.Equal(incident.Id, response.Id);
@@ -38,9 +46,9 @@ public class IncidentApplicationTests
     [Fact]
     public void GetReturnsNullForMissingIncident()
     {
-        var service = new IncidentService(new FakeAirSmsDbContext());
+        var handler = new GetIncidentByIdQueryHandler(new FakeAirSmsDbContext());
 
-        Assert.Null(service.GetById(Guid.NewGuid()));
+        Assert.Null(handler.Handle(new GetIncidentByIdQuery(Guid.NewGuid())));
     }
 
     [Fact]
@@ -49,9 +57,9 @@ public class IncidentApplicationTests
         var older = CreateIncident();
         Thread.Sleep(1);
         var newer = CreateIncident();
-        var service = new IncidentService(new FakeAirSmsDbContext(older, newer));
+        var handler = new ListIncidentsQueryHandler(new FakeAirSmsDbContext(older, newer));
 
-        var responses = service.List();
+        var responses = handler.Handle();
 
         Assert.Equal(new[] { newer.Id, older.Id }, responses.Select(response => response.Id));
     }
@@ -62,9 +70,9 @@ public class IncidentApplicationTests
         var open = CreateIncident();
         var assigned = CreateIncident();
         assigned.AssignTo(Guid.NewGuid());
-        var service = new IncidentService(new FakeAirSmsDbContext(open, assigned));
+        var handler = new ListIncidentsQueryHandler(new FakeAirSmsDbContext(open, assigned));
 
-        var responses = service.List(new ListIncidentsRequest { Status = IncidentStatus.Assigned });
+        var responses = handler.Handle(new ListIncidentsQuery { Status = IncidentStatus.Assigned });
 
         var response = Assert.Single(responses);
         Assert.Equal(assigned.Id, response.Id);
@@ -78,9 +86,9 @@ public class IncidentApplicationTests
         var middle = CreateIncident();
         Thread.Sleep(1);
         var newest = CreateIncident();
-        var service = new IncidentService(new FakeAirSmsDbContext(oldest, middle, newest));
+        var handler = new ListIncidentsQueryHandler(new FakeAirSmsDbContext(oldest, middle, newest));
 
-        var responses = service.List(new ListIncidentsRequest { Page = 2, PageSize = 1 });
+        var responses = handler.Handle(new ListIncidentsQuery { Page = 2, PageSize = 1 });
 
         var response = Assert.Single(responses);
         Assert.Equal(middle.Id, response.Id);
@@ -89,10 +97,10 @@ public class IncidentApplicationTests
     [Fact]
     public void ListRejectsInvalidPageSize()
     {
-        var service = new IncidentService(new FakeAirSmsDbContext());
+        var handler = new ListIncidentsQueryHandler(new FakeAirSmsDbContext());
 
         Assert.Throws<ArgumentException>(() =>
-            service.List(new ListIncidentsRequest { PageSize = 101 }));
+            handler.Handle(new ListIncidentsQuery { PageSize = 101 }));
     }
 
     [Fact]
@@ -102,7 +110,8 @@ public class IncidentApplicationTests
         var context = new FakeAirSmsDbContext(incident);
         var assigneeId = Guid.NewGuid();
 
-        var response = await new IncidentService(context).AssignAsync(incident.Id, assigneeId);
+        var response = await new AssignIncidentCommandHandler(context)
+            .Handle(new AssignIncidentCommand(incident.Id, assigneeId, Guid.NewGuid()));
 
         Assert.NotNull(response);
         Assert.Equal(IncidentStatus.Assigned, response.Status);
@@ -116,8 +125,8 @@ public class IncidentApplicationTests
         var incident = CreateIncident();
         incident.AssignTo(Guid.NewGuid());
 
-        var response = await new IncidentService(new FakeAirSmsDbContext(incident))
-            .StartAsync(incident.Id);
+        var response = await new StartIncidentCommandHandler(new FakeAirSmsDbContext(incident))
+            .Handle(new StartIncidentCommand(incident.Id, Guid.NewGuid()));
 
         Assert.NotNull(response);
         Assert.Equal(IncidentStatus.InProgress, response.Status);
@@ -127,9 +136,10 @@ public class IncidentApplicationTests
     public async Task StartOpenIncidentThrowsInvalidOperation()
     {
         var incident = CreateIncident();
-        var service = new IncidentService(new FakeAirSmsDbContext(incident));
+        var handler = new StartIncidentCommandHandler(new FakeAirSmsDbContext(incident));
 
-        await Assert.ThrowsAsync<IncidentConflictException>(() => service.StartAsync(incident.Id));
+        await Assert.ThrowsAsync<IncidentConflictException>(() =>
+            handler.Handle(new StartIncidentCommand(incident.Id, Guid.NewGuid())));
     }
 
     [Fact]
@@ -139,8 +149,8 @@ public class IncidentApplicationTests
         incident.AssignTo(Guid.NewGuid());
         incident.StartProgress();
 
-        var response = await new IncidentService(new FakeAirSmsDbContext(incident))
-            .ResolveAsync(incident.Id);
+        var response = await new ResolveIncidentCommandHandler(new FakeAirSmsDbContext(incident))
+            .Handle(new ResolveIncidentCommand(incident.Id, Guid.NewGuid()));
 
         Assert.NotNull(response);
         Assert.Equal(IncidentStatus.Resolved, response.Status);
@@ -151,9 +161,10 @@ public class IncidentApplicationTests
     public async Task ResolveOpenIncidentThrowsInvalidOperation()
     {
         var incident = CreateIncident();
-        var service = new IncidentService(new FakeAirSmsDbContext(incident));
+        var handler = new ResolveIncidentCommandHandler(new FakeAirSmsDbContext(incident));
 
-        await Assert.ThrowsAsync<IncidentConflictException>(() => service.ResolveAsync(incident.Id));
+        await Assert.ThrowsAsync<IncidentConflictException>(() =>
+            handler.Handle(new ResolveIncidentCommand(incident.Id, Guid.NewGuid())));
     }
 
     [Fact]
@@ -164,8 +175,8 @@ public class IncidentApplicationTests
         incident.StartProgress();
         incident.Resolve();
 
-        var response = await new IncidentService(new FakeAirSmsDbContext(incident))
-            .CloseAsync(incident.Id);
+        var response = await new CloseIncidentCommandHandler(new FakeAirSmsDbContext(incident))
+            .Handle(new CloseIncidentCommand(incident.Id, Guid.NewGuid()));
 
         Assert.NotNull(response);
         Assert.Equal(IncidentStatus.Closed, response.Status);
@@ -175,9 +186,10 @@ public class IncidentApplicationTests
     public async Task CloseBeforeResolvedThrowsInvalidOperation()
     {
         var incident = CreateIncident();
-        var service = new IncidentService(new FakeAirSmsDbContext(incident));
+        var handler = new CloseIncidentCommandHandler(new FakeAirSmsDbContext(incident));
 
-        await Assert.ThrowsAsync<IncidentConflictException>(() => service.CloseAsync(incident.Id));
+        await Assert.ThrowsAsync<IncidentConflictException>(() =>
+            handler.Handle(new CloseIncidentCommand(incident.Id, Guid.NewGuid())));
     }
 
     internal static CreateIncidentRequest CreateRequest()
@@ -189,6 +201,19 @@ public class IncidentApplicationTests
             IncidentSeverity.High,
             "AS123",
             "N123AS");
+    }
+
+    internal static CreateIncidentCommand CreateCommand(Guid? reporterId = null)
+    {
+        var request = CreateRequest();
+        return new CreateIncidentCommand(
+            request.Title,
+            request.Description,
+            request.Category,
+            request.Severity,
+            reporterId ?? Guid.NewGuid(),
+            request.FlightNumber,
+            request.AircraftRegistration);
     }
 
     private static Incident CreateIncident()
@@ -209,8 +234,12 @@ internal sealed class FakeAirSmsDbContext(params Incident[] incidents) : IAirSms
 {
     public List<Incident> StoredIncidents { get; } = [.. incidents];
     public List<User> StoredUsers { get; } = [];
+    public List<AuditEvent> StoredAuditEvents { get; } = [];
+    public List<Notification> StoredNotifications { get; } = [];
     public IQueryable<Incident> Incidents => StoredIncidents.AsQueryable();
     public IQueryable<User> Users => StoredUsers.AsQueryable();
+    public IQueryable<AuditEvent> AuditEvents => StoredAuditEvents.AsQueryable();
+    public IQueryable<Notification> Notifications => StoredNotifications.AsQueryable();
     public int SaveChangesCalls { get; private set; }
 
     public Task<Incident?> FindIncidentForUpdateAsync(
@@ -226,6 +255,16 @@ internal sealed class FakeAirSmsDbContext(params Incident[] incidents) : IAirSms
         StoredIncidents.Add(incident);
     }
 
+    public void AddAuditEvent(AuditEvent auditEvent)
+    {
+        StoredAuditEvents.Add(auditEvent);
+    }
+
+    public void AddNotification(Notification notification)
+    {
+        StoredNotifications.Add(notification);
+    }
+
     public Task<User?> FindUserByEmailAsync(
         string normalizedEmail,
         CancellationToken cancellationToken = default)
@@ -237,6 +276,14 @@ internal sealed class FakeAirSmsDbContext(params Incident[] incidents) : IAirSms
     public void AddUser(User user)
     {
         StoredUsers.Add(user);
+    }
+
+    public Task<Notification?> FindNotificationForUpdateAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(StoredNotifications.SingleOrDefault(notification => notification.Id == id));
     }
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

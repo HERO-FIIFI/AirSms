@@ -90,6 +90,13 @@ public static class AuthenticationSetup
                     .RequireRole(
                         nameof(UserRole.Supervisor),
                         nameof(UserRole.Administrator)));
+
+            options.AddPolicy(
+                AuthorizationPolicies.AdministratorOnly,
+                policy => policy
+                    .RequireAuthenticatedUser()
+                    .RequireClaim(ClaimTypes.NameIdentifier)
+                    .RequireRole(nameof(UserRole.Administrator)));
         });
 
         return services;

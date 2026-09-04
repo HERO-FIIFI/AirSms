@@ -13,3 +13,9 @@ obj/
 
 TestResults/
 coverage/
+
+**/App_Data/DataProtectionKeys/
+
+node_modules/
+dist/
+.npm-cache/

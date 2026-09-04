@@ -11,6 +11,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.ToTable("users");
 
         builder.HasKey(user => user.Id);
+        builder.Ignore(user => user.DomainEvents);
 
         builder.Property(user => user.Email)
             .HasMaxLength(254)
