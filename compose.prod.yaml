@@ -1,0 +1,237 @@
+name: airsms
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-api-environment: &api-environment
+  ASPNETCORE_URLS: http://+:8080
+  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+  ConnectionStrings__AirSmsDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:?Set POSTGRES_DB};Username=${POSTGRES_USER:?Set POSTGRES_USER};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+  Jwt__Issuer: ${JWT_ISSUER:?Set JWT_ISSUER}
+  Jwt__Audience: ${JWT_AUDIENCE:?Set JWT_AUDIENCE}
+  Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY}
+  Jwt__ExpirationMinutes: "60"
+  Kafka__Enabled: "true"
+  Kafka__BootstrapServers: kafka:29092
+  Kafka__IncidentEventsTopic: airsms.incident-events.v1
+  Kafka__ClientId: airsms-api
+  Kafka__ConsumerGroup: airsms-core-projections-v1
+  Database__ApplyMigrations: "false"
+  Authentication__AllowRegistration: "false"
+
+x-notifications-environment: &notifications-environment
+  ASPNETCORE_URLS: http://+:8080
+  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+  ConnectionStrings__NotificationsDatabase: Host=postgres;Port=5432;Database=${AIRSMS_NOTIFICATIONS_DATABASE:?Set AIRSMS_NOTIFICATIONS_DATABASE};Username=${POSTGRES_USER:?Set POSTGRES_USER};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+  Jwt__Issuer: ${JWT_ISSUER:?Set JWT_ISSUER}
+  Jwt__Audience: ${JWT_AUDIENCE:?Set JWT_AUDIENCE}
+  Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY}
+  Kafka__Enabled: "true"
+  Kafka__BootstrapServers: kafka:29092
+  Kafka__IncidentEventsTopic: airsms.incident-events.v1
+  Kafka__ClientId: airsms-notifications
+  Kafka__ConsumerGroup: airsms-notifications-v1
+  Email__Enabled: "true"
+  Email__Host: ${SMTP_HOST:?Set SMTP_HOST}
+  Email__Port: ${SMTP_PORT:?Set SMTP_PORT}
+  Email__Username: ${SMTP_USERNAME:?Set SMTP_USERNAME}
+  Email__Password: ${SMTP_PASSWORD:?Set SMTP_PASSWORD}
+  Email__EnableSsl: ${SMTP_ENABLE_SSL:-true}
+  Email__FromAddress: ${SMTP_FROM_ADDRESS:?Set SMTP_FROM_ADDRESS}
+  Email__FromName: ${SMTP_FROM_NAME:-AirSms Operations}
+  Email__MaxAttempts: "5"
+  Email__PollIntervalSeconds: "5"
+  Database__ApplyMigrations: "false"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      AIRSMS_NOTIFICATIONS_DATABASE: ${AIRSMS_NOTIFICATIONS_DATABASE:?Set AIRSMS_NOTIFICATIONS_DATABASE}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *default-logging
+
+  kafka:
+    image: apache/kafka:4.1.0
+    restart: unless-stopped
+    environment:
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:?Set KAFKA_CLUSTER_ID}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    volumes:
+      - kafka-data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+    logging: *default-logging
+
+  airsms-api-migrate:
+    profiles: [tools]
+    image: ${AIRSMS_API_IMAGE:?Set AIRSMS_API_IMAGE}
+    command: ["--migrate"]
+    environment: *api-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  airsms-notifications-migrate:
+    profiles: [tools]
+    image: ${AIRSMS_NOTIFICATIONS_IMAGE:?Set AIRSMS_NOTIFICATIONS_IMAGE}
+    command: ["--migrate"]
+    environment: *notifications-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  airsms-bootstrap-admin:
+    profiles: [tools]
+    image: ${AIRSMS_API_IMAGE:?Set AIRSMS_API_IMAGE}
+    command: ["--bootstrap-admin"]
+    environment:
+      <<: *api-environment
+      BootstrapAdmin__Email: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BootstrapAdmin__Password: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      BootstrapAdmin__FirstName: ${BOOTSTRAP_ADMIN_FIRST_NAME:-}
+      BootstrapAdmin__LastName: ${BOOTSTRAP_ADMIN_LAST_NAME:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  airsms-api:
+    image: ${AIRSMS_API_IMAGE:?Set AIRSMS_API_IMAGE}
+    restart: unless-stopped
+    environment: *api-environment
+    volumes:
+      - api-data-protection:/app/App_Data/DataProtectionKeys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *default-logging
+
+  airsms-projections-worker:
+    image: ${AIRSMS_PROJECTIONS_IMAGE:?Set AIRSMS_PROJECTIONS_IMAGE}
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__AirSmsDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:?Set POSTGRES_DB};Username=${POSTGRES_USER:?Set POSTGRES_USER};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      Kafka__Enabled: "true"
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__IncidentEventsTopic: airsms.incident-events.v1
+      Kafka__ClientId: airsms-projections-worker
+      Kafka__ConsumerGroup: airsms-core-projections-v1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "ps | grep -q '[A]irSms.Projections.Worker.dll'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *default-logging
+
+  airsms-notifications:
+    image: ${AIRSMS_NOTIFICATIONS_IMAGE:?Set AIRSMS_NOTIFICATIONS_IMAGE}
+    restart: unless-stopped
+    environment: *notifications-environment
+    volumes:
+      - notifications-data-protection:/app/App_Data/DataProtectionKeys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *default-logging
+
+  airsms-web:
+    image: ${AIRSMS_WEB_IMAGE:?Set AIRSMS_WEB_IMAGE}
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: https://${APP_DOMAIN:?Set APP_DOMAIN}
+      VITE_NOTIFICATIONS_API_BASE_URL: https://${APP_DOMAIN:?Set APP_DOMAIN}
+    depends_on:
+      airsms-api:
+        condition: service_healthy
+      airsms-notifications:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      airsms-web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *default-logging
+
+volumes:
+  postgres-data:
+  kafka-data:
+  api-data-protection:
+  notifications-data-protection:
+  caddy-data:
+  caddy-config:

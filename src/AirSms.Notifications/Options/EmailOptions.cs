@@ -9,6 +9,9 @@ public sealed class EmailOptions
     public int Port { get; set; } = 1025;
     public string FromAddress { get; set; } = "notifications@airsms.local";
     public string FromName { get; set; } = "AirSms Operations";
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    public bool EnableSsl { get; set; }
     public int MaxAttempts { get; set; } = 3;
     public int PollIntervalSeconds { get; set; } = 5;
 }

@@ -1,0 +1,35 @@
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		-Server
+		Content-Security-Policy "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+
+	handle /health/api {
+		rewrite * /health/ready
+		reverse_proxy airsms-api:8080
+	}
+
+	handle /health/notifications {
+		rewrite * /health/ready
+		reverse_proxy airsms-notifications:8080
+	}
+
+	handle /api/notifications* {
+		reverse_proxy airsms-notifications:8080
+	}
+
+	handle /api/* {
+		reverse_proxy airsms-api:8080
+	}
+
+	handle {
+		reverse_proxy airsms-web:80
+	}
+}

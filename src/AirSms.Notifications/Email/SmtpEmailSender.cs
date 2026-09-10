@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Mail;
 using AirSms.Notifications.Options;
 using Microsoft.Extensions.Options;
@@ -19,7 +20,15 @@ public sealed class SmtpEmailSender(IOptions<EmailOptions> options) : IEmailSend
         };
         message.To.Add(request.To);
 
-        using var client = new SmtpClient(value.Host, value.Port);
+        using var client = new SmtpClient(value.Host, value.Port)
+        {
+            EnableSsl = value.EnableSsl
+        };
+        if (!string.IsNullOrWhiteSpace(value.Username))
+        {
+            client.Credentials = new NetworkCredential(value.Username, value.Password);
+        }
+
         await client.SendMailAsync(message, cancellationToken);
     }
 }

@@ -54,7 +54,6 @@ export function AppLayout() {
       <main className="main">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Operations Console</p>
             <h1>Incident Management</h1>
           </div>
           <div className="identity">

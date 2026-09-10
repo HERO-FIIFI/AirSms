@@ -10,7 +10,9 @@ using AirSms.Application.Incidents.Commands.StartIncident;
 using AirSms.Application.Incidents.Queries.GetIncidentById;
 using AirSms.Application.Incidents.Queries.ListIncidents;
 using AirSms.Infrastructure;
+using AirSms.Infrastructure.Persistence;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +27,7 @@ builder.Services.AddInfrastructure(
     InfrastructureHostedServices.OutboxPublisher);
 builder.Services.AddAirSmsAuthentication(builder.Configuration);
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AdminBootstrapService>();
 builder.Services.AddScoped<CreateIncidentCommandHandler>();
 builder.Services.AddScoped<AssignIncidentCommandHandler>();
 builder.Services.AddScoped<StartIncidentCommandHandler>();
@@ -53,6 +56,32 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+var migrateOnly = args.Contains("--migrate", StringComparer.OrdinalIgnoreCase);
+var bootstrapAdmin = args.Contains("--bootstrap-admin", StringComparer.OrdinalIgnoreCase);
+if (migrateOnly || bootstrapAdmin || builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<AirSmsDbContext>().Database.MigrateAsync();
+
+    if (bootstrapAdmin)
+    {
+        string Required(string key) => builder.Configuration[key]
+            ?? throw new InvalidOperationException($"Configuration '{key}' is required.");
+
+        await scope.ServiceProvider.GetRequiredService<AdminBootstrapService>().EnsureAdminAsync(
+            new RegisterUserRequest(
+                Required("BootstrapAdmin:Email"),
+                Required("BootstrapAdmin:Password"),
+                Required("BootstrapAdmin:FirstName"),
+                Required("BootstrapAdmin:LastName")));
+    }
+
+    if (migrateOnly || bootstrapAdmin)
+    {
+        return;
+    }
+}
+
 app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
@@ -60,15 +89,20 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    app.UseCors("ViteDevelopment");
 }
 
-app.UseHttpsRedirection();
+app.UseCors("ViteDevelopment");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health/ready", async (AirSmsDbContext dbContext) =>
+    await dbContext.Database.CanConnectAsync()
+        ? Results.Ok(new { status = "ready" })
+        : Results.Problem("AirSms database is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable));
+
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();
 
 public partial class Program;

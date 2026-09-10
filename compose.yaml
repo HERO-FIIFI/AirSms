@@ -3,20 +3,18 @@ services:
     image: postgres:16-alpine
     container_name: airsms-postgres
     restart: unless-stopped
-
     environment:
-      POSTGRES_DB: airsms
-      POSTGRES_USER: airsms
-      POSTGRES_PASSWORD: airsms_dev_password
-
+      POSTGRES_DB: ${POSTGRES_DB:-airsms}
+      POSTGRES_USER: ${POSTGRES_USER:-airsms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airsms_dev_password}
+      AIRSMS_NOTIFICATIONS_DATABASE: ${AIRSMS_NOTIFICATIONS_DATABASE:-airsms_notifications}
     ports:
       - "5432:5432"
-
     volumes:
       - airsms-postgres-data:/var/lib/postgresql/data
-
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airsms -d airsms"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-airsms} -d $${POSTGRES_DB:-airsms}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,27 +23,24 @@ services:
     image: apache/kafka:4.1.0
     container_name: airsms-kafka
     restart: unless-stopped
-
     ports:
       - "9092:9092"
-
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@airsms-kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+      KAFKA_LISTENERS: PLAINTEXT://:29092,HOST://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://127.0.0.1:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 12
@@ -54,13 +49,132 @@ services:
     image: axllent/mailpit:latest
     container_name: airsms-mailpit
     restart: unless-stopped
-
     ports:
       - "1025:1025"
       - "8025:8025"
-
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  airsms-api:
+    build:
+      context: .
+      dockerfile: src/AirSms.Api/Dockerfile
+    container_name: airsms-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__AirSmsDatabase: Host=postgres;Port=5432;Database=${AIRSMS_DATABASE:-airsms};Username=${POSTGRES_USER:-airsms};Password=${POSTGRES_PASSWORD:-airsms_dev_password}
+      Jwt__Issuer: ${JWT_ISSUER:-AirSms.Api}
+      Jwt__Audience: ${JWT_AUDIENCE:-AirSms.Client}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-local-development-only-signing-key-replace-outside-development}
+      Jwt__ExpirationMinutes: 60
+      Kafka__Enabled: "true"
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__IncidentEventsTopic: airsms.incident-events.v1
+      Kafka__ClientId: airsms-api
+      Kafka__ConsumerGroup: airsms-core-projections-v1
+      Database__ApplyMigrations: "true"
+      Authentication__AllowRegistration: "true"
+    ports:
+      - "5000:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  airsms-projections-worker:
+    build:
+      context: .
+      dockerfile: src/AirSms.Projections.Worker/Dockerfile
+    container_name: airsms-projections-worker
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__AirSmsDatabase: Host=postgres;Port=5432;Database=${AIRSMS_DATABASE:-airsms};Username=${POSTGRES_USER:-airsms};Password=${POSTGRES_PASSWORD:-airsms_dev_password}
+      Kafka__Enabled: "true"
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__IncidentEventsTopic: airsms.incident-events.v1
+      Kafka__ClientId: airsms-projections-worker
+      Kafka__ConsumerGroup: airsms-core-projections-v1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "ps | grep -q '[A]irSms.Projections.Worker.dll'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  airsms-notifications:
+    build:
+      context: .
+      dockerfile: src/AirSms.Notifications/Dockerfile
+    container_name: airsms-notifications
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__NotificationsDatabase: Host=postgres;Port=5432;Database=${AIRSMS_NOTIFICATIONS_DATABASE:-airsms_notifications};Username=${POSTGRES_USER:-airsms};Password=${POSTGRES_PASSWORD:-airsms_dev_password}
+      Jwt__Issuer: ${JWT_ISSUER:-AirSms.Api}
+      Jwt__Audience: ${JWT_AUDIENCE:-AirSms.Client}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-local-development-only-signing-key-replace-outside-development}
+      Kafka__Enabled: "true"
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__IncidentEventsTopic: airsms.incident-events.v1
+      Kafka__ClientId: airsms-notifications
+      Kafka__ConsumerGroup: airsms-notifications-v1
+      Email__Enabled: "true"
+      Email__Host: mailpit
+      Email__Port: 1025
+      Email__FromAddress: notifications@airsms.local
+      Email__FromName: AirSms Operations
+      Email__MaxAttempts: 3
+      Email__PollIntervalSeconds: 5
+      Database__ApplyMigrations: "true"
+    ports:
+      - "5001:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  airsms-web:
+    build:
+      context: ./src/AirSms.Web
+    container_name: airsms-web
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://localhost:5000
+      VITE_NOTIFICATIONS_API_BASE_URL: http://localhost:5001
+    ports:
+      - "5173:80"
+    depends_on:
+      airsms-api:
+        condition: service_healthy
+      airsms-notifications:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 12

@@ -7,13 +7,20 @@ namespace AirSms.Api.Controllers;
 [ApiController]
 [AllowAnonymous]
 [Route("api/auth")]
-public sealed class AuthController(AuthService authService) : ControllerBase
+public sealed class AuthController(
+    AuthService authService,
+    IConfiguration configuration) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<ActionResult<UserResponse>> Register(
         RegisterUserRequest request,
         CancellationToken cancellationToken)
     {
+        if (!configuration.GetValue<bool>("Authentication:AllowRegistration"))
+        {
+            return NotFound();
+        }
+
         var user = await authService.RegisterAsync(request, cancellationToken);
         return StatusCode(StatusCodes.Status201Created, user);
     }

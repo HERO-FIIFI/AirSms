@@ -141,7 +141,9 @@ internal static class ApiTestHelpers
     }
 }
 
-internal sealed class AirSmsApiFactory(FakeAirSmsDbContext context)
+internal sealed class AirSmsApiFactory(
+    FakeAirSmsDbContext context,
+    bool allowRegistration = true)
     : WebApplicationFactory<Program>
 {
     public HttpClient CreateAuthenticatedClient(UserRole role, Guid? userId = null)
@@ -155,6 +157,7 @@ internal sealed class AirSmsApiFactory(FakeAirSmsDbContext context)
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseSetting("Authentication:AllowRegistration", allowRegistration.ToString());
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureServices(services =>
         {

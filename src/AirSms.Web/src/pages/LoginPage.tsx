@@ -44,7 +44,6 @@ export function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-panel">
-        <p className="eyebrow">AirSms Operations</p>
         <h1>Sign in</h1>
         <form onSubmit={onSubmit} className="form">
           <label>

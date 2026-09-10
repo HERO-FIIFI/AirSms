@@ -13,9 +13,27 @@ export class ApiError extends Error {
   }
 }
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+declare global {
+  interface Window {
+    __AIRSMS_CONFIG__?: {
+      apiBaseUrl?: string;
+      notificationsApiBaseUrl?: string;
+    };
+  }
+}
+
+const runtimeConfig = typeof window === "undefined"
+  ? undefined
+  : window.__AIRSMS_CONFIG__;
+
+const apiBaseUrl =
+  runtimeConfig?.apiBaseUrl ||
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost:5000";
 export const notificationsApiBaseUrl =
-  import.meta.env.VITE_NOTIFICATIONS_API_BASE_URL || apiBaseUrl;
+  runtimeConfig?.notificationsApiBaseUrl ||
+  import.meta.env.VITE_NOTIFICATIONS_API_BASE_URL ||
+  apiBaseUrl;
 
 let accessToken: string | null = null;
 let unauthorizedHandler: (() => void) | null = null;

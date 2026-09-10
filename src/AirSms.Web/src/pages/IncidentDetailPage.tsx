@@ -47,7 +47,6 @@ export function IncidentDetailPage() {
       <Link to="/incidents" className="back-link">Back to incidents</Link>
       <div className="detail-header">
         <div>
-          <p className="eyebrow">Incident</p>
           <h2>{incident.title}</h2>
         </div>
         <Badge value={spaced(incident.status)} />

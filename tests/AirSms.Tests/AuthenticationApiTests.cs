@@ -61,6 +61,17 @@ public class AuthenticationApiTests
     }
 
     [Fact]
+    public async Task RegistrationCanBeDisabled()
+    {
+        using var factory = new AirSmsApiFactory(new FakeAirSmsDbContext(), allowRegistration: false);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", RegistrationRequest());
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task WrongPasswordReturnsUnauthorized()
     {
         using var factory = new AirSmsApiFactory(new FakeAirSmsDbContext());

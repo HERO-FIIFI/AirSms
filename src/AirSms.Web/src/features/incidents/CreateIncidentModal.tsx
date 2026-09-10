@@ -62,7 +62,9 @@ export function CreateIncidentModal({ onClose, onCreated }: Props) {
         <div className="modal-header">
           <h2 id="report-title">Report Incident</h2>
           <button className="icon-button" onClick={onClose} aria-label="Close">
-            x
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
           </button>
         </div>
         <form className="form" onSubmit={onSubmit}>

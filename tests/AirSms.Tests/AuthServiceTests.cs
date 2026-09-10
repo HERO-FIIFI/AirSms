@@ -93,6 +93,42 @@ public class AuthServiceTests
             new LoginRequest(user.Email, "LocalPass123!")));
     }
 
+    [Fact]
+    public async Task BootstrapCreatesAdministratorAndIsIdempotent()
+    {
+        var context = new FakeAirSmsDbContext();
+        var hasher = new FakePasswordHashService();
+        var service = new AdminBootstrapService(context, hasher);
+        var request = new RegisterUserRequest(
+            "admin@airsms.local",
+            "AdminPass123!",
+            "AirSms",
+            "Admin");
+
+        var created = await service.EnsureAdminAsync(request);
+        var existing = await service.EnsureAdminAsync(request);
+
+        Assert.Equal(UserRole.Administrator, created.Role);
+        Assert.Equal(created.Id, existing.Id);
+        Assert.Single(context.StoredUsers);
+        Assert.Equal("AdminPass123!", hasher.LastHashedPassword);
+    }
+
+    [Fact]
+    public async Task BootstrapRejectsExistingNonAdministrator()
+    {
+        var context = new FakeAirSmsDbContext();
+        context.AddUser(CreateUser());
+        var service = new AdminBootstrapService(context, new FakePasswordHashService());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnsureAdminAsync(
+            new RegisterUserRequest(
+                "agent@airsms.local",
+                "AdminPass123!",
+                "AirSms",
+                "Admin")));
+    }
+
     private static User CreateUser()
     {
         return new User(

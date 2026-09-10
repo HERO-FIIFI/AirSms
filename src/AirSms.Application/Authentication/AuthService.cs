@@ -60,7 +60,7 @@ public sealed class AuthService(
         return new LoginResponse(token.Token, token.ExpiresAt, ToResponse(user));
     }
 
-    private static void ValidatePassword(string password)
+    internal static void ValidatePassword(string password)
     {
         if (string.IsNullOrWhiteSpace(password) || password.Length is < 8 or > 128)
         {
@@ -70,7 +70,7 @@ public sealed class AuthService(
         }
     }
 
-    private static UserResponse ToResponse(User user)
+    internal static UserResponse ToResponse(User user)
     {
         return new UserResponse(
             user.Id,

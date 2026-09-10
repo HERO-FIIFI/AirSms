@@ -47,11 +47,7 @@ public partial class Program
 
         var app = builder.Build();
 
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseCors("ViteDevelopment");
-        }
-
+        app.UseCors("ViteDevelopment");
         app.UseAuthentication();
         app.UseAuthorization();
 
@@ -62,6 +58,18 @@ public partial class Program
                 : Results.Problem("Notification database is unavailable.", statusCode: 503));
 
         MapNotificationEndpoints(app);
+
+        var migrateOnly = args.Contains("--migrate", StringComparer.OrdinalIgnoreCase);
+        if (migrateOnly || builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        {
+            await using var scope = app.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Database.MigrateAsync();
+
+            if (migrateOnly)
+            {
+                return;
+            }
+        }
 
         await app.RunAsync();
     }
