@@ -73,6 +73,14 @@ public class Incident : BaseEntity
             throw new ArgumentException("Assignee ID cannot be empty.", nameof(userId));
         }
 
+        // Reassigning live work is legitimate; reopening finished work through the
+        // assign path is not, since it would strand ResolvedAt on an active incident.
+        if (Status is IncidentStatus.Resolved or IncidentStatus.Closed)
+        {
+            throw new InvalidOperationException(
+                "A resolved or closed incident cannot be assigned.");
+        }
+
         AssignedToUserId = userId;
         Status = IncidentStatus.Assigned;
         MarkUpdated();

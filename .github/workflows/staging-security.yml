@@ -1,0 +1,74 @@
+name: Staging security test
+
+# Dynamic scan of a deployed staging environment. Runs on demand and weekly;
+# it needs the STAGING_URL repository variable (for example
+# https://staging.airsms.example.com) and skips cleanly when that is unset.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Base URL of the staging deployment
+        required: false
+        type: string
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  zap-baseline:
+    name: OWASP ZAP baseline
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ${{ inputs.target || vars.STAGING_URL }}
+    steps:
+      - name: Require a target
+        run: |
+          if [ -z "$TARGET" ]; then
+            echo "::notice::STAGING_URL is not configured; skipping dynamic scan."
+            echo "skip=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Staging must be up
+        if: env.skip != 'true'
+        run: |
+          curl --fail --silent --show-error --max-time 20 "$TARGET/health/api"
+          curl --fail --silent --show-error --max-time 20 "$TARGET/health/notifications"
+
+      - name: Security headers present
+        if: env.skip != 'true'
+        run: |
+          headers="$(curl --silent --show-error --head --max-time 20 "$TARGET/")"
+          for expected in strict-transport-security content-security-policy x-content-type-options x-frame-options; do
+            echo "$headers" | grep -qi "^$expected:" || { echo "::error::missing $expected"; exit 1; }
+          done
+
+      - name: Unauthenticated API access is refused
+        if: env.skip != 'true'
+        run: |
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 "$TARGET/api/incidents")"
+          [ "$status" = "401" ] || { echo "::error::expected 401 from /api/incidents, got $status"; exit 1; }
+
+      - name: Login is rate limited
+        if: env.skip != 'true'
+        run: |
+          seen429=false
+          for _ in $(seq 1 12); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 \
+              -H 'Content-Type: application/json' \
+              -d '{"email":"probe@example.com","password":"not-a-real-password"}' \
+              "$TARGET/api/auth/login")"
+            [ "$status" = "429" ] && seen429=true && break
+          done
+          $seen429 || { echo "::error::no 429 after 12 login attempts"; exit 1; }
+
+      - name: ZAP baseline scan
+        if: env.skip != 'true'
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ env.TARGET }}
+          allow_issue_writing: true
+          artifact_name: zap-baseline-report

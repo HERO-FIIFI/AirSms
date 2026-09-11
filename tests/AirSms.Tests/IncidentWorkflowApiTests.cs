@@ -158,6 +158,13 @@ internal sealed class AirSmsApiFactory(
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Authentication:AllowRegistration", allowRegistration.ToString());
+        // Development settings seed users and migrate on startup against a real
+        // database; the test host must never do either.
+        builder.UseSetting("Database:ApplyMigrations", "false");
+        builder.UseSetting("SeedUsers:Enabled", "false");
+        // Parallel test hosts share one process; keep the limiter out of the way.
+        builder.UseSetting("RateLimiting:PermitLimit", "100000");
+        builder.UseSetting("RateLimiting:AuthPermitLimit", "100000");
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureServices(services =>
         {

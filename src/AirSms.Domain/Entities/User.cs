@@ -71,6 +71,39 @@ public class User : BaseEntity
         MarkUpdated();
     }
 
+    public void Reactivate()
+    {
+        if (IsActive)
+        {
+            return;
+        }
+
+        IsActive = true;
+        MarkUpdated();
+    }
+
+    public void ChangeRole(UserRole role)
+    {
+        if (!Enum.IsDefined(role))
+        {
+            throw new ArgumentOutOfRangeException(nameof(role));
+        }
+
+        if (Role == role)
+        {
+            return;
+        }
+
+        Role = role;
+        MarkUpdated();
+    }
+
+    public void ResetPassword(string passwordHash)
+    {
+        PasswordHash = Required(passwordHash, nameof(passwordHash));
+        MarkUpdated();
+    }
+
     private static string Required(string value, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value))

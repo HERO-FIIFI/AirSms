@@ -273,6 +273,14 @@ internal sealed class FakeAirSmsDbContext(params Incident[] incidents) : IAirSms
         return Task.FromResult(StoredUsers.SingleOrDefault(user => user.Email == normalizedEmail));
     }
 
+    public Task<User?> FindUserForUpdateAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(StoredUsers.SingleOrDefault(user => user.Id == id));
+    }
+
     public void AddUser(User user)
     {
         StoredUsers.Add(user);

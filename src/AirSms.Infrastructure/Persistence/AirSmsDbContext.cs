@@ -60,6 +60,13 @@ public class AirSmsDbContext(DbContextOptions<AirSmsDbContext> options)
             cancellationToken);
     }
 
+    public Task<User?> FindUserForUpdateAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return Users.SingleOrDefaultAsync(user => user.Id == id, cancellationToken);
+    }
+
     public void AddUser(User user)
     {
         Users.Add(user);

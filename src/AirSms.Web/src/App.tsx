@@ -5,6 +5,7 @@ import { IncidentDetailPage } from "./pages/IncidentDetailPage";
 import { IncidentsPage } from "./pages/IncidentsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
+import { UsersPage } from "./pages/UsersPage";
 import { useAuth } from "./auth/AuthContext";
 
 export function App() {
@@ -19,6 +20,14 @@ export function App() {
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route
+            path="/users"
+            element={
+              auth.user?.role === "Administrator"
+                ? <UsersPage />
+                : <Navigate to="/incidents" replace />
+            }
+          />
         </Route>
       </Route>
     </Routes>

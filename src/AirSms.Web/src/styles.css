@@ -98,7 +98,10 @@ a {
 
 .login-page {
   align-items: center;
-  background: var(--nav);
+  background:
+    radial-gradient(120% 90% at 78% 8%, #1b2b39 0%, transparent 58%),
+    radial-gradient(90% 70% at 8% 96%, #16232f 0%, transparent 60%),
+    var(--nav);
   display: flex;
   min-height: 100vh;
   justify-content: center;
@@ -115,17 +118,63 @@ a {
   position: absolute;
   top: 0;
   width: clamp(8px, 1.2vw, 18px);
+  z-index: 2;
 }
 
-.login-page::after {
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.login-backdrop {
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
+}
+
+.login-backdrop-icons {
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.login-backdrop-icons g {
+  fill: none;
+  stroke: #ffffff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Slow controller sweep over the icon field: the page's one authored motion. */
+.login-sweep {
+  aspect-ratio: 1;
+  background: conic-gradient(
+    from 0deg,
+    rgba(239, 74, 88, 0.16) 0deg,
+    rgba(239, 74, 88, 0.04) 26deg,
+    transparent 62deg,
+    transparent 360deg
+  );
   border-radius: 50%;
   content: "";
-  height: min(64vw, 760px);
+  display: block;
+  left: 68%;
+  -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
   position: absolute;
-  right: -22vw;
-  top: -28vw;
-  width: min(64vw, 760px);
+  top: 68%;
+  translate: -50% -50%;
+  width: min(150vw, 1500px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .login-sweep {
+    animation: sweep 22s linear infinite;
+  }
+
+  @keyframes sweep {
+    to {
+      rotate: 360deg;
+    }
+  }
 }
 
 .login-panel,
@@ -137,21 +186,55 @@ a {
 }
 
 .login-panel {
-  max-width: 430px;
-  padding: 42px;
+  max-width: 452px;
+  padding: 40px;
   position: relative;
   width: 100%;
   z-index: 1;
 }
 
-.login-panel::before {
-  background: var(--red);
-  border-radius: 999px;
-  content: "";
-  display: block;
-  height: 5px;
-  margin-bottom: 28px;
-  width: 46px;
+.login-lockup {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 14px;
+  padding-bottom: 22px;
+}
+
+.login-mark {
+  fill: var(--red);
+  flex-shrink: 0;
+  height: 36px;
+  width: 36px;
+}
+
+.login-mark-fin {
+  fill: #8d1622;
+}
+
+.login-wordmark {
+  color: var(--ink);
+  font-size: 1.32rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  line-height: 1;
+}
+
+.login-wordmark-sub {
+  color: var(--muted);
+  font-size: 0.755rem;
+  letter-spacing: 0.035em;
+  margin-top: 7px;
+}
+
+.login-intro {
+  margin-top: 30px;
+}
+
+.login-intro .muted {
+  line-height: 1.55;
+  margin: 9px 0 0;
+  max-width: 40ch;
 }
 
 .login-panel h1,
@@ -164,7 +247,30 @@ a {
 }
 
 .login-panel h1 {
-  font-size: clamp(2rem, 5vw, 2.65rem);
+  font-size: clamp(1.65rem, 3.4vw, 2.05rem);
+}
+
+.login-footnote {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  display: flex;
+  font-size: 0.79rem;
+  gap: 10px;
+  line-height: 1.45;
+  margin-top: 26px;
+  padding-top: 20px;
+}
+
+.login-footnote svg {
+  fill: none;
+  flex-shrink: 0;
+  height: 16px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+  width: 16px;
 }
 
 .form {
@@ -665,6 +771,66 @@ th {
 
 .detail-wide {
   grid-column: 1 / -1;
+}
+
+.workflow-bar {
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 18px;
+}
+
+.workflow-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workflow-label {
+  color: #53606b;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.workflow-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.workflow-assign {
+  display: flex;
+  flex: 1 1 340px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workflow-assign select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.self-tag {
+  background: var(--red-soft);
+  border-radius: 999px;
+  color: #9c202d;
+  font-size: 0.68rem;
+  font-weight: 800;
+  margin-left: 8px;
+  padding: 3px 7px;
 }
 
 .notification-list {

@@ -1,11 +1,14 @@
+using AirSms.Api.RateLimiting;
 using AirSms.Application.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AirSms.Api.Controllers;
 
 [ApiController]
 [AllowAnonymous]
+[EnableRateLimiting(RateLimitingSetup.AuthPolicy)]
 [Route("api/auth")]
 public sealed class AuthController(
     AuthService authService,

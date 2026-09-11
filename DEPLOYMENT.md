@@ -61,6 +61,17 @@ unset BOOTSTRAP_ADMIN_PASSWORD
 Leave `BOOTSTRAP_ADMIN_PASSWORD` blank in `.env.production`. Public
 registration is disabled in production.
 
+Further accounts are created and managed by an administrator in the web UI
+under **Users**: promote or demote roles, deactivate or reactivate accounts,
+and reset passwords. The last active administrator cannot be demoted or
+deactivated, and administrators cannot change their own role or access.
+
+For local development only, `appsettings.Development.json` seeds
+`supervisor@airsms.com` / `Supervisor123!` and `admin@airsms.com` /
+`Admin123!` on startup. The same mechanism works elsewhere with
+`SeedUsers__Enabled=true` and a `SeedUsers__Accounts__N__*` block per account,
+or with the `--seed-users` argument.
+
 If PostgreSQL's volume already existed before the notifications database was
 introduced, create that database manually before running its migrations. Init
 scripts run only when PostgreSQL first initializes an empty volume.
@@ -86,7 +97,7 @@ Sign in with the bootstrapped administrator and verify incident creation,
 assignment, start, resolution, closure, audit projection, notification
 delivery, and receipt through the configured SMTP provider.
 
-## Logs and backups
+## Logs
 
 Container logs are limited to five 10 MB files:
 
@@ -94,26 +105,86 @@ Container logs are limited to five 10 MB files:
 docker compose --env-file .env.production -f compose.prod.yaml logs --tail=200
 ~~~
 
-Back up both databases daily, encrypt the files, copy them off-host, and test
-restores regularly:
+## Backups
+
+The `postgres-backup` service runs with the stack and writes a custom-format
+`pg_dump` of both databases into the `postgres-backups` volume every
+`BACKUP_INTERVAL_SECONDS` (default daily), pruning dumps older than
+`BACKUP_RETENTION_DAYS` (default 14). Its health check turns unhealthy when
+no dump younger than two intervals exists, so a stalled backup shows up in
+`docker compose ps` and in monitoring.
+
+Take an immediate backup, list what exists, and copy dumps off-host:
 
 ~~~sh
-set -a
-. ./.env.production
-set +a
-mkdir -p backups
-chmod 700 backups
-docker compose --env-file .env.production -f compose.prod.yaml exec -T postgres \
-  pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB" > "backups/airsms-$(date -u +%Y%m%dT%H%M%SZ).dump"
-docker compose --env-file .env.production -f compose.prod.yaml exec -T postgres \
-  pg_dump -Fc -U "$POSTGRES_USER" "$AIRSMS_NOTIFICATIONS_DATABASE" > "backups/notifications-$(date -u +%Y%m%dT%H%M%SZ).dump"
-chmod 600 backups/*.dump
+docker compose --env-file .env.production -f compose.prod.yaml run --rm postgres-backup-now
+docker compose --env-file .env.production -f compose.prod.yaml exec postgres-backup ls -lh /backups
+docker run --rm -v airsms_postgres-backups:/backups:ro -v "$PWD/offsite:/out" alpine \
+  sh -c 'cp /backups/*.dump /out/'
 ~~~
 
-Restore only into an empty recovery environment first. Stop application
-services before an approved production restore, then use `pg_restore` with
-the matching database name. Kafka persistence supports restart recovery but
-does not replace database backups.
+Encrypt the copied files and store them outside this host. A backup that only
+lives on the server it protects is not a backup.
+
+Restore only into an empty recovery environment first. For an approved
+production restore, stop the application services, then restore each database
+from the dump you choose:
+
+~~~sh
+docker compose --env-file .env.production -f compose.prod.yaml stop airsms-api airsms-notifications airsms-projections-worker
+docker compose --env-file .env.production -f compose.prod.yaml run --rm postgres-restore airsms /backups/airsms-20260911T030000Z.dump
+docker compose --env-file .env.production -f compose.prod.yaml run --rm postgres-restore airsms_notifications /backups/airsms_notifications-20260911T030000Z.dump
+docker compose --env-file .env.production -f compose.prod.yaml start airsms-api airsms-notifications airsms-projections-worker
+~~~
+
+Kafka persistence supports restart recovery but does not replace database
+backups.
+
+## Monitoring
+
+Every service publishes a Docker health check, so `docker compose ps` is the
+first line of monitoring. The `monitoring` profile adds Uptime Kuma for
+dashboards, response-time history, and alerting (email, Slack, Teams, webhook):
+
+~~~sh
+docker compose --env-file .env.production -f compose.prod.yaml --profile monitoring up -d
+ssh -L 3001:127.0.0.1:3001 user@your-server
+~~~
+
+It listens only on the server's loopback interface; reach it through the SSH
+tunnel above at http://localhost:3001. On first run create the admin account,
+then add HTTP monitors for:
+
+- `https://$APP_DOMAIN/health/api` (API and its database)
+- `https://$APP_DOMAIN/health/notifications` (notification service and its database)
+- `https://$APP_DOMAIN/` (web front end through Caddy)
+- a Docker container monitor for `postgres-backup`, so a stalled backup pages you
+
+Attach at least one notification channel to each monitor.
+
+## Rate limiting
+
+The API applies a fixed-window limit of `RATE_LIMIT_PER_MINUTE` requests per
+client (per user when authenticated, per IP otherwise) and a separate
+`AUTH_RATE_LIMIT_PER_MINUTE` budget per IP on `/api/auth/*`. Rejections
+return `429` with a `Retry-After` header. Health endpoints are exempt. Because
+the API only receives traffic from Caddy, it trusts `X-Forwarded-For` from the
+proxy; do not publish the API port directly.
+
+## Security testing
+
+Every push runs the `Security` job in CI: a NuGet vulnerability audit
+(including transitive packages), `npm audit` on production dependencies, and
+a Trivy scan for vulnerable dependencies, leaked secrets, and Dockerfile
+misconfiguration. Findings appear under the repository's Security tab.
+
+The `Staging security test` workflow runs weekly and on demand against a
+deployed environment. Set the `STAGING_URL` repository variable (or pass a
+target when dispatching it). It confirms both health endpoints, checks the
+security headers Caddy must send, verifies that unauthenticated API access is
+refused and that login is rate limited, and then runs an OWASP ZAP baseline
+scan, publishing the report as a workflow artifact and opening an issue for
+new findings.
 
 ## Upgrade and rollback
 

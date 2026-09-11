@@ -21,6 +21,20 @@ x-api-environment: &api-environment
   Kafka__ConsumerGroup: airsms-core-projections-v1
   Database__ApplyMigrations: "false"
   Authentication__AllowRegistration: "false"
+  # The API is only reachable through Caddy on the internal network, so the
+  # proxy's X-Forwarded-For is trusted for per-client rate limiting.
+  ForwardedHeaders__TrustProxy: "true"
+  RateLimiting__PermitLimit: ${RATE_LIMIT_PER_MINUTE:-120}
+  RateLimiting__AuthPermitLimit: ${AUTH_RATE_LIMIT_PER_MINUTE:-8}
+
+x-backup-environment: &backup-environment
+  PGHOST: postgres
+  PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER}
+  PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+  BACKUP_DATABASES: ${POSTGRES_DB:?Set POSTGRES_DB} ${AIRSMS_NOTIFICATIONS_DATABASE:?Set AIRSMS_NOTIFICATIONS_DATABASE}
+  BACKUP_DIR: /backups
+  BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+  BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
 
 x-notifications-environment: &notifications-environment
   ASPNETCORE_URLS: http://+:8080
@@ -91,6 +105,72 @@ services:
       interval: 15s
       timeout: 10s
       retries: 12
+    logging: *default-logging
+
+  postgres-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    environment: *backup-environment
+    volumes:
+      - postgres-backups:/backups
+      - ./docker/postgres/backup.sh:/scripts/backup.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Healthy once at least one dump exists and is younger than two intervals.
+      test: ["CMD-SHELL", "find /backups -name '*.dump' -mmin -$$(( ${BACKUP_INTERVAL_SECONDS:-86400} / 30 )) | grep -q ."]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+    logging: *default-logging
+
+  postgres-backup-now:
+    profiles: [tools]
+    image: postgres:16-alpine
+    entrypoint: ["/bin/sh", "/scripts/backup.sh", "--once"]
+    environment: *backup-environment
+    volumes:
+      - postgres-backups:/backups
+      - ./docker/postgres/backup.sh:/scripts/backup.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  postgres-restore:
+    profiles: [tools]
+    image: postgres:16-alpine
+    entrypoint: ["/bin/sh", "/scripts/restore.sh"]
+    environment: *backup-environment
+    volumes:
+      - postgres-backups:/backups:ro
+      - ./docker/postgres/restore.sh:/scripts/restore.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  uptime-kuma:
+    # ponytail: black-box monitoring over the health endpoints; add OpenTelemetry
+    # + Prometheus when per-endpoint latency and error rates are needed.
+    profiles: [monitoring]
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    depends_on:
+      airsms-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "extra/healthcheck"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
     logging: *default-logging
 
   airsms-api-migrate:
@@ -230,6 +310,8 @@ services:
 
 volumes:
   postgres-data:
+  postgres-backups:
+  uptime-kuma-data:
   kafka-data:
   api-data-protection:
   notifications-data-protection:

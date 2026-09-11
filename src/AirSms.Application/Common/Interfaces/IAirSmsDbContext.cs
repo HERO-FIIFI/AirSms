@@ -21,6 +21,10 @@ public interface IAirSmsDbContext
         string normalizedEmail,
         CancellationToken cancellationToken = default);
 
+    Task<User?> FindUserForUpdateAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+
     void AddUser(User user);
 
     Task<Notification?> FindNotificationForUpdateAsync(

@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using AirSms.Api.Authentication;
 using AirSms.Api.ErrorHandling;
+using AirSms.Api.RateLimiting;
 using AirSms.Application.Authentication;
 using AirSms.Application.Incidents.Commands.AssignIncident;
 using AirSms.Application.Incidents.Commands.CloseIncident;
@@ -9,9 +10,12 @@ using AirSms.Application.Incidents.Commands.ResolveIncident;
 using AirSms.Application.Incidents.Commands.StartIncident;
 using AirSms.Application.Incidents.Queries.GetIncidentById;
 using AirSms.Application.Incidents.Queries.ListIncidents;
+using AirSms.Application.Users;
+using AirSms.Domain.Enums;
 using AirSms.Infrastructure;
 using AirSms.Infrastructure.Persistence;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +32,7 @@ builder.Services.AddInfrastructure(
 builder.Services.AddAirSmsAuthentication(builder.Configuration);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AdminBootstrapService>();
+builder.Services.AddScoped<UserAdminService>();
 builder.Services.AddScoped<CreateIncidentCommandHandler>();
 builder.Services.AddScoped<AssignIncidentCommandHandler>();
 builder.Services.AddScoped<StartIncidentCommandHandler>();
@@ -37,6 +42,7 @@ builder.Services.AddScoped<GetIncidentByIdQueryHandler>();
 builder.Services.AddScoped<ListIncidentsQueryHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddAirSmsRateLimiting(builder.Configuration);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ViteDevelopment", policy =>
@@ -58,7 +64,10 @@ var app = builder.Build();
 
 var migrateOnly = args.Contains("--migrate", StringComparer.OrdinalIgnoreCase);
 var bootstrapAdmin = args.Contains("--bootstrap-admin", StringComparer.OrdinalIgnoreCase);
-if (migrateOnly || bootstrapAdmin || builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+var seedUsers = args.Contains("--seed-users", StringComparer.OrdinalIgnoreCase)
+    || builder.Configuration.GetValue<bool>("SeedUsers:Enabled");
+if (migrateOnly || bootstrapAdmin || seedUsers
+    || builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<AirSmsDbContext>().Database.MigrateAsync();
@@ -76,10 +85,51 @@ if (migrateOnly || bootstrapAdmin || builder.Configuration.GetValue<bool>("Datab
                 Required("BootstrapAdmin:LastName")));
     }
 
+    if (seedUsers)
+    {
+        var bootstrap = scope.ServiceProvider.GetRequiredService<AdminBootstrapService>();
+        var accounts = builder.Configuration
+            .GetSection("SeedUsers:Accounts")
+            .Get<SeedUserOptions[]>() ?? [];
+
+        foreach (var account in accounts)
+        {
+            if (!Enum.TryParse<UserRole>(account.Role, ignoreCase: true, out var role))
+            {
+                throw new InvalidOperationException(
+                    $"Seed user '{account.Email}' has unknown role '{account.Role}'.");
+            }
+
+            await bootstrap.EnsureUserAsync(
+                new RegisterUserRequest(
+                    account.Email,
+                    account.Password,
+                    account.FirstName,
+                    account.LastName),
+                role);
+        }
+
+        app.Logger.LogInformation("Seeded {SeedUserCount} user account(s).", accounts.Length);
+    }
+
     if (migrateOnly || bootstrapAdmin)
     {
         return;
     }
+}
+
+// Behind Caddy every request arrives from the proxy's address. Honour
+// X-Forwarded-* only when the deployment says the proxy is the sole ingress,
+// otherwise rate limiting would key every user on one IP.
+if (builder.Configuration.GetValue<bool>("ForwardedHeaders:TrustProxy"))
+{
+    var forwarded = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    };
+    forwarded.KnownNetworks.Clear();
+    forwarded.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwarded);
 }
 
 app.UseExceptionHandler();
@@ -94,15 +144,26 @@ if (app.Environment.IsDevelopment())
 app.UseCors("ViteDevelopment");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
-app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }));
+// Container and probe traffic must never be throttled out of its own health check.
+app.MapGet("/health/live", () => Results.Ok(new { status = "ok" }))
+    .DisableRateLimiting();
 app.MapGet("/health/ready", async (AirSmsDbContext dbContext) =>
     await dbContext.Database.CanConnectAsync()
         ? Results.Ok(new { status = "ready" })
-        : Results.Problem("AirSms database is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable));
+        : Results.Problem("AirSms database is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable))
+    .DisableRateLimiting();
 
 app.MapControllers();
 
 await app.RunAsync();
 
 public partial class Program;
+
+public sealed record SeedUserOptions(
+    string Email,
+    string Password,
+    string FirstName,
+    string LastName,
+    string Role);

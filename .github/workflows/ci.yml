@@ -57,6 +57,55 @@ jobs:
       - name: Test
         run: npm test -- --run
 
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/AirSms.Web/package-lock.json
+      - name: Restore
+        run: dotnet restore AirSms.sln
+      - name: NuGet vulnerability audit
+        # `dotnet list` exits 0 even when it finds vulnerabilities; grep turns
+        # any reported package into a failing step.
+        run: |
+          dotnet list AirSms.sln package --vulnerable --include-transitive | tee nuget-audit.txt
+          if grep -q "has the following vulnerable packages" nuget-audit.txt; then
+            echo "::error::Vulnerable NuGet packages found"
+            exit 1
+          fi
+      - name: npm dependency audit
+        working-directory: src/AirSms.Web
+        run: |
+          npm ci --ignore-scripts
+          npm audit --omit=dev --audit-level=high
+      - name: Trivy scan (dependencies, secrets, Dockerfile misconfiguration)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: sarif
+          output: trivy.sarif
+      - name: Upload Trivy findings to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+
   docker:
     name: Docker
     runs-on: ubuntu-latest

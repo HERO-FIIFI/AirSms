@@ -40,6 +40,7 @@ export function AppLayout() {
             <span>Notifications</span>
             {unreadCount > 0 && <span className="count-badge">{unreadCount}</span>}
           </NavLink>
+          {user?.role === "Administrator" && <NavLink to="/users">Users</NavLink>}
         </nav>
         <div className="user-panel">
           <div className="user-name">

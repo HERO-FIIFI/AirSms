@@ -117,7 +117,9 @@ test("login failure shows invalid credentials", async () => {
   await userEvent.type(screen.getByLabelText(/password/i), "wrong-password");
   await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-  expect(await screen.findByText("Invalid email or password.")).toBeTruthy();
+  expect(
+    await screen.findByText("That email and password combination was not recognised."),
+  ).toBeTruthy();
 });
 
 test("protected route redirects anonymous users to login", () => {

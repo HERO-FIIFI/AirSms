@@ -1,5 +1,6 @@
 using AirSms.Application.Authentication;
 using AirSms.Application.Incidents;
+using AirSms.Application.Users;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -27,6 +28,10 @@ public sealed class ApiExceptionHandler(
             DuplicateEmailException => (
                 StatusCodes.Status409Conflict,
                 "Email already registered",
+                exception.Message),
+            UserConflictException => (
+                StatusCodes.Status409Conflict,
+                "User administration conflict",
                 exception.Message),
             AuthenticationFailedException => (
                 StatusCodes.Status401Unauthorized,

@@ -189,6 +189,50 @@ public class IncidentTests
     }
 
     [Fact]
+    public void ResolvedIncidentCannotBeAssigned()
+    {
+        var incident = CreateIncident(Guid.NewGuid());
+        incident.AssignTo(Guid.NewGuid());
+        incident.StartProgress();
+        incident.Resolve();
+        incident.ClearDomainEvents();
+
+        Assert.Throws<InvalidOperationException>(() => incident.AssignTo(Guid.NewGuid()));
+
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+        Assert.NotNull(incident.ResolvedAt);
+        Assert.Empty(incident.DomainEvents);
+    }
+
+    [Fact]
+    public void ClosedIncidentCannotBeAssigned()
+    {
+        var incident = CreateIncident(Guid.NewGuid());
+        incident.AssignTo(Guid.NewGuid());
+        incident.StartProgress();
+        incident.Resolve();
+        incident.Close();
+
+        Assert.Throws<InvalidOperationException>(() => incident.AssignTo(Guid.NewGuid()));
+
+        Assert.Equal(IncidentStatus.Closed, incident.Status);
+    }
+
+    [Fact]
+    public void InProgressIncidentCanBeReassigned()
+    {
+        var incident = CreateIncident(Guid.NewGuid());
+        incident.AssignTo(Guid.NewGuid());
+        incident.StartProgress();
+        var newAssignee = Guid.NewGuid();
+
+        incident.AssignTo(newAssignee);
+
+        Assert.Equal(IncidentStatus.Assigned, incident.Status);
+        Assert.Equal(newAssignee, incident.AssignedToUserId);
+    }
+
+    [Fact]
     public void ClearingEventsRemovesPendingDomainEvents()
     {
         var incident = CreateIncident(Guid.NewGuid());
